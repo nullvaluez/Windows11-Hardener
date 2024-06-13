@@ -46,7 +46,7 @@ Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST' -location 'Defaul
 auditpol /set /category:* /success:enable /failure:enable
 
 # Disable Unnecessary Windows Features
-$featuresToRemove = @("TelnetClient", "TFTP", "MediaPlayback", "WindowsMediaPlayer", "HelloFace", "XPS-Viewer", "WorkFolders-Client")
+$featuresToRemove = @("TelnetClient", "TFTP", "MediaPlayback", "WindowsMediaPlayer", "HelloFace", "XPS-Viewer", "WorkFolders-Client", "Microsoft-Windows-Subsystem-Linux")
 foreach ($feature in $featuresToRemove) {
     Disable-WindowsOptionalFeature -Online -FeatureName $feature
 }
@@ -62,16 +62,25 @@ foreach ($service in $criticalServices) {
     New-NetFirewallRule -DisplayName "Block Internet for Critical App" -Direction Outbound -Program $service -Action Block
 }
 
+# Fetch and block malicious IPs from Project Honey Pot
+Write-Output "Fetching and blocking malicious IPs from Project Honey Pot..."
+$maliciousIPs = (Invoke-WebRequest -Uri 'https://www.projecthoneypot.org/list_of_ips.php' -UseBasicParsing).Content -split "`n" | Where-Object { $_ -match "\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b" }
+foreach ($ip in $maliciousIPs) {
+    if (![string]::IsNullOrWhiteSpace($ip)) {
+        New-NetFirewallRule -DisplayName "Block Malicious IP $ip" -Direction Inbound -Action Block -RemoteAddress $ip
+    }
+}
+
 # Mitigation for CVE-2023-35641 (ICS RCE)
 # Ensure ICS (Internet Connection Sharing) is disabled
-Set-Service 'SharedAccess' -StartupType Disabled
+Set-Service 'SharedAccess' -StartupartupType Disabled
 Stop-Service 'SharedAccess'
 
 # Mitigation for CVE-2023-35708 (SQL Injection Vulnerability)
-# Hardening database interactions in applications
-# Note: This is a conceptual placeholder. Actual implementation will depend on application-specific configurations and practices.
+# Note: Implement secure coding practices in your database interactions
+Write-Output "Ensure your applications use parameterized queries to mitigate SQL Injection vulnerabilities."
 
-# Log actions
+# Log actions to file
 $LogPath = "C:\HardeningLog_Enhanced.txt"
 "Comprehensive hardening completed at $(Get-Date)" | Out-File -FilePath $LogPath -Append
 
